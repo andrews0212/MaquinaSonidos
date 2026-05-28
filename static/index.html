@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Monitor Bomba · IA Stream</title>
+  <style>
+    :root {
+      --bg:      #080d1a;
+      --panel:   #0f1623;
+      --border:  #1a2535;
+      --blue:    #3b82f6;
+      --green:   #22c55e;
+      --red:     #ef4444;
+      --amber:   #f59e0b;
+      --text:    #e2e8f0;
+      --muted:   #64748b;
+      --font:    'Courier New', monospace;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: var(--font); min-height: 100vh; overflow-x: hidden;
+    }
+
+    /* ── Alarm overlay ── */
+    #overlay {
+      position: fixed; inset: 0; z-index: 50; pointer-events: none;
+      background: rgba(239,68,68,.06); opacity: 0; transition: opacity .2s;
+    }
+    #overlay.on { opacity: 1; animation: flash-bg .5s infinite; }
+    @keyframes flash-bg {
+      0%,100% { background: rgba(239,68,68,.06); }
+      50%      { background: rgba(239,68,68,.18); }
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--panel); border-bottom: 2px solid var(--border);
+      padding: 13px 24px; display: flex; align-items: center; gap: 12px;
+    }
+    header h1  { font-size: 15px; letter-spacing: 3px; font-weight: bold; }
+    header sub { display: block; font-size: 10px; color: var(--muted); letter-spacing: 1px; margin-top: 2px; }
+    .spacer    { flex: 1; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 9px; border-radius: 99px; font-size: 10px;
+      letter-spacing: 1px; border: 1px solid currentColor;
+    }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .badge.off { color: var(--muted); }
+    .badge.on  { color: var(--green); }
+    .badge.on .dot { animation: pulse .9s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* ── Main layout ── */
+    main { max-width: 1080px; margin: 0 auto; padding: 20px; }
+
+    /* ── Controls ── */
+    .controls {
+      display: flex; gap: 8px; margin-bottom: 16px;
+      flex-wrap: wrap; align-items: center;
+    }
+    button {
+      padding: 9px 18px; border: none; border-radius: 5px;
+      font-family: var(--font); font-size: 11px; letter-spacing: 1px;
+      cursor: pointer; transition: filter .15s, transform .1s;
+      font-weight: bold;
+    }
+    button:active:not(:disabled) { transform: scale(.96); }
+    button:disabled { opacity: .35; cursor: not-allowed; }
+    button:not(:disabled):hover { filter: brightness(1.18); }
+    .btn-start { background: var(--green);  color: #000; }
+    .btn-stop  { background: var(--red);    color: #fff; }
+    .btn-cal   { background: var(--amber);  color: #000; }
+    .btn-reset { background: var(--border); color: var(--text); }
+    .thr-row {
+      display: flex; align-items: center; gap: 8px;
+      margin-left: auto; font-size: 11px; color: var(--muted);
+    }
+    #thr-range { width: 120px; accent-color: var(--amber); cursor: pointer; }
+    #thr-val   { color: var(--amber); font-weight: bold; min-width: 52px; }
+
+    /* ── Alarm banner ── */
+    .banner {
+      display: flex; align-items: center; gap: 16px;
+      padding: 15px 20px; border-radius: 8px; margin-bottom: 16px;
+      border: 2px solid var(--green); background: rgba(34,197,94,.06);
+      transition: border-color .2s, background .2s;
+    }
+    .banner.alarm {
+      border-color: var(--red); background: rgba(239,68,68,.1);
+      animation: banner-flash .5s infinite;
+    }
+    @keyframes banner-flash {
+      0%,100% { background: rgba(239,68,68,.10); }
+      50%      { background: rgba(239,68,68,.22); }
+    }
+    #b-icon { font-size: 34px; flex-shrink: 0; }
+    #b-status { font-size: 20px; font-weight: bold; }
+    .banner:not(.alarm) #b-status { color: var(--green); }
+    .banner.alarm       #b-status { color: var(--red); }
+    #b-desc { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .banner-mse { margin-left: auto; text-align: right; flex-shrink: 0; }
+    #b-mse      { font-size: 30px; font-weight: bold; font-family: monospace; }
+    .banner-mse span { display: block; font-size: 10px; color: var(--muted); letter-spacing: 1px; }
+
+    /* ── Two-column grid ── */
+    .grid2 {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 14px; margin-bottom: 14px;
+    }
+    @media (max-width: 680px) { .grid2 { grid-template-columns: 1fr; } }
+
+    /* ── Panels ── */
+    .panel {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 8px; padding: 15px;
+    }
+    .ptitle {
+      font-size: 9px; letter-spacing: 2px; color: var(--muted);
+      margin-bottom: 9px; text-transform: uppercase;
+    }
+
+    canvas {
+      display: block; width: 100%; border-radius: 4px;
+      background: #040810;
+    }
+
+    /* ── Buffer bar ── */
+    .buf-row {
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 9px; font-size: 10px; color: var(--muted);
+    }
+    .buf-bg   { flex: 1; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
+    .buf-fill {
+      height: 100%; border-radius: 3px;
+      background: linear-gradient(90deg, var(--blue), var(--green));
+      transition: width .3s;
+    }
+    #buf-text { min-width: 90px; text-align: right; }
+
+    /* ── MSE chart labels ── */
+    .chart-labels {
+      display: flex; justify-content: space-between;
+      margin-top: 7px; font-size: 10px; color: var(--muted);
+    }
+    .chart-labels .thr-l { color: var(--amber); }
+
+    /* ── Stats ── */
+    .stats {
+      display: grid; grid-template-columns: repeat(4,1fr);
+      gap: 10px; margin-bottom: 14px;
+    }
+    @media (max-width: 680px) { .stats { grid-template-columns: repeat(2,1fr); } }
+    .stat {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px; text-align: center;
+    }
+    .stat-val { font-size: 20px; font-weight: bold; }
+    .stat-lbl { font-size: 9px; color: var(--muted); letter-spacing: 1px; margin-top: 3px; }
+
+    /* ── Log ── */
+    #log-title { font-size: 9px; letter-spacing: 2px; color: var(--muted); margin-bottom: 6px; }
+    #log {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+      padding: 10px 14px; height: 120px; overflow-y: auto; font-size: 11px;
+    }
+    .ll   { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,.03); }
+    .err  { color: var(--red);   }
+    .ok   { color: var(--green); }
+    .inf  { color: var(--blue);  }
+    .warn { color: var(--amber); }
+
+    /* ── Scrollbar styling ── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  </style>
+</head>
+<body>
+  <div id="overlay"></div>
+
+  <header>
+    <span style="font-size:22px">⚙️</span>
+    <div>
+      <h1>MONITOR DE BOMBA · IA STREAM</h1>
+      <sub>Autoencoder CNN · Detección de anomalías acústicas en tiempo real</sub>
+    </div>
+    <span class="spacer"></span>
+    <span class="badge off" id="bdg-ws"><span class="dot"></span>SERVIDOR</span>
+    <span class="badge off" id="bdg-mic"><span class="dot"></span>MICRÓFONO</span>
+  </header>
+
+  <main>
+    <!-- Controls -->
+    <div class="controls">
+      <button class="btn-start" id="btn-start" onclick="startMonitoring()">▶ INICIAR</button>
+      <button class="btn-stop"  id="btn-stop"  onclick="stopMonitoring()" disabled>■ DETENER</button>
+      <button class="btn-cal"   id="btn-cal"   onclick="calibrate()"      disabled>🎯 CALIBRAR</button>
+      <button class="btn-reset"                onclick="resetStats()">↺ RESET</button>
+      <div class="thr-row">
+        <label for="thr-range">UMBRAL:</label>
+        <input type="range" id="thr-range" min="0.001" max="0.1" step="0.001" value="0.02"
+               oninput="setThreshold(this.value)">
+        <span id="thr-val">0.0200</span>
+      </div>
+    </div>
+
+    <!-- File analysis panel -->
+    <div class="panel" id="file-panel" style="margin-bottom:14px">
+      <div class="ptitle">ANALIZAR ARCHIVO DE AUDIO</div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <label for="file-input" class="btn btn-reset" style="cursor:pointer;padding:8px 16px;font-size:11px">
+          📂 SELECCIONAR WAV / MP3
+        </label>
+        <input type="file" id="file-input" accept=".wav,.mp3,.ogg,.flac" hidden onchange="analyzeFile(this.files[0])">
+        <div id="file-drop" style="
+          flex:1; min-width:160px; border:1px dashed var(--muted); border-radius:5px;
+          padding:8px 14px; font-size:11px; color:var(--muted); text-align:center; cursor:pointer;
+        " onclick="document.getElementById('file-input').click()"
+           ondragover="event.preventDefault();this.style.borderColor='var(--blue)'"
+           ondragleave="this.style.borderColor='var(--muted)'"
+           ondrop="event.preventDefault();this.style.borderColor='var(--muted)';analyzeFile(event.dataTransfer.files[0])">
+          Arrastra un archivo aqui
+        </div>
+        <div id="file-spinner" style="display:none;font-size:11px;color:var(--blue)">Analizando…</div>
+      </div>
+      <div id="file-result" style="margin-top:10px;display:none">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:6px">
+          <div class="stat" style="padding:8px">
+            <div class="stat-val" id="fr-max" style="color:var(--amber);font-size:17px">–</div>
+            <div class="stat-lbl">MSE MAX</div>
+          </div>
+          <div class="stat" style="padding:8px">
+            <div class="stat-val" id="fr-mean" style="color:var(--blue);font-size:17px">–</div>
+            <div class="stat-lbl">MSE MEDIO</div>
+          </div>
+          <div class="stat" style="padding:8px">
+            <div class="stat-val" id="fr-dur" style="color:var(--green);font-size:17px">–</div>
+            <div class="stat-lbl">DURACION</div>
+          </div>
+          <div class="stat" style="padding:8px">
+            <div class="stat-val" id="fr-verdict" style="font-size:17px">–</div>
+            <div class="stat-lbl">ESTADO</div>
+          </div>
+        </div>
+        <canvas id="fr-chart" height="55" style="margin-top:8px;border-radius:4px;background:#040810"></canvas>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px" id="fr-info"></div>
+      </div>
+    </div>
+
+    <!-- Model info bar -->
+    <div style="
+      background:var(--panel); border:1px solid var(--border); border-radius:8px;
+      padding:10px 16px; margin-bottom:14px;
+      display:flex; align-items:center; gap:16px; flex-wrap:wrap; font-size:11px;
+    ">
+      <span style="color:var(--muted)">MODELO</span>
+      <span style="color:var(--green); font-weight:bold">autoencoder_bomba_mejor.pth</span>
+      <span style="color:var(--muted)">|</span>
+      <span style="color:var(--muted)">ARQUITECTURA</span>
+      <span style="color:var(--text)">AutoencoderCNN · 128×320 mel-frames · MSE loss</span>
+      <span style="color:var(--muted)">|</span>
+      <span style="color:var(--muted)">INFERENCIAS</span>
+      <span style="color:var(--blue); font-weight:bold" id="infer-count">0</span>
+      <span style="color:var(--muted)">|</span>
+      <span style="color:var(--muted)">LÓGICA</span>
+      <span style="color:var(--text)">MSE alto = sonido inesperado = fallo</span>
+    </div>
+
+    <!-- Alarm banner -->
+    <div class="banner" id="banner">
+      <span id="b-icon">✅</span>
+      <div>
+        <div id="b-status">ESTADO NORMAL</div>
+        <div id="b-desc">Pulsa INICIAR para comenzar el monitoreo</div>
+      </div>
+      <div class="banner-mse">
+        <div id="b-mse">–.–––––</div>
+        <span>MSE ACTUAL</span>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="grid2">
+      <div class="panel">
+        <div class="ptitle">FORMA DE ONDA · 1 segundo</div>
+        <canvas id="cv-wave" height="100"></canvas>
+        <div class="buf-row">
+          <span>BUFFER</span>
+          <div class="buf-bg"><div class="buf-fill" id="buf-fill" style="width:0%"></div></div>
+          <span id="buf-text">0.0 / 10.2 s</span>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="ptitle">HISTORIAL MSE · ÚLTIMAS 60 LECTURAS</div>
+        <canvas id="cv-mse" height="100"></canvas>
+        <div class="chart-labels">
+          <span>Mín: <span id="mse-min">–</span></span>
+          <span class="thr-l">Umbral: <span id="thr-lbl">0.0200</span></span>
+          <span>Máx: <span id="mse-max">–</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-val" id="s-mse"    style="color:var(--blue)">–</div>
+        <div class="stat-lbl">MSE ACTUAL</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val" id="s-max"    style="color:var(--amber)">–</div>
+        <div class="stat-lbl">MSE MÁXIMO</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val" id="s-alarms" style="color:var(--red)">0</div>
+        <div class="stat-lbl">ALARMAS</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val" id="s-time"   style="color:var(--green)">0s</div>
+        <div class="stat-lbl">TIEMPO ACTIVO</div>
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div id="log-title">REGISTRO DE EVENTOS</div>
+    <div id="log"></div>
+  </main>
+
+  <script>
+    // ── Estado global ────────────────────────────────────────────────────────
+    let ws          = null;
+    let audioCtx    = null;
+    let alarmCtx    = null;
+    let worklet     = null;
+    let stream      = null;
+
+    let threshold   = 0.02;
+    let alarmCount  = 0;
+    let maxMse      = 0;
+    let minMse      = Infinity;
+    let mseHistory  = [];           // últimas 60 lecturas
+    let monitoring  = false;
+    let alarmOn     = false;
+    let startTime   = null;
+
+    // Buffer circular de forma de onda (1 segundo = 16 000 muestras)
+    const WAVE_SIZE = 16_000;
+    let waveBuf = new Float32Array(WAVE_SIZE);
+    let wavePos = 0;
+
+    // Calibración
+    let calVals  = [];
+    let calMode  = false;
+
+    const WS_URL = `ws://${location.host}/ws`;
+
+    // ── Umbral ───────────────────────────────────────────────────────────────
+    function setThreshold(v) {
+      threshold = parseFloat(v);
+      document.getElementById('thr-val').textContent = threshold.toFixed(4);
+      document.getElementById('thr-lbl').textContent = threshold.toFixed(4);
+    }
+
+    // ── Log ──────────────────────────────────────────────────────────────────
+    function log(msg, cls = '') {
+      const el   = document.getElementById('log');
+      const time = new Date().toLocaleTimeString('es-ES');
+      const line = document.createElement('div');
+      line.className = 'll ' + cls;
+      line.textContent = `[${time}] ${msg}`;
+      el.appendChild(line);
+      el.scrollTop = el.scrollHeight;
+      while (el.childElementCount > 60) el.removeChild(el.firstChild);
+    }
+
+    // ── Sonido de alarma ─────────────────────────────────────────────────────
+    function beep(freq, dur) {
+      try {
+        if (!alarmCtx) alarmCtx = new AudioContext();
+        const osc  = alarmCtx.createOscillator();
+        const gain = alarmCtx.createGain();
+        osc.connect(gain); gain.connect(alarmCtx.destination);
+        osc.frequency.value = freq;
+        osc.type = 'square';
+        gain.gain.setValueAtTime(0.22, alarmCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, alarmCtx.currentTime + dur);
+        osc.start(); osc.stop(alarmCtx.currentTime + dur);
+      } catch (_) { /* puede fallar si no hay gesto de usuario previo */ }
+    }
+
+    function triggerAlarmSound() {
+      beep(880, 0.12);
+      setTimeout(() => beep(1100, 0.12), 140);
+      setTimeout(() => beep(880,  0.12), 280);
+    }
+
+    // ── Estado de la alarma ──────────────────────────────────────────────────
+    function setAlarm(on, mse) {
+      if (on && !alarmOn) {
+        alarmOn = true;
+        alarmCount++;
+        document.getElementById('s-alarms').textContent = alarmCount;
+        document.getElementById('overlay').classList.add('on');
+        document.getElementById('banner').classList.add('alarm');
+        document.getElementById('b-icon').textContent   = '🚨';
+        document.getElementById('b-status').textContent = '¡ANOMALÍA DETECTADA!';
+        log(`⚠ ANOMALÍA — MSE: ${mse.toFixed(6)} > umbral ${threshold.toFixed(4)}`, 'err');
+        triggerAlarmSound();
+      } else if (!on && alarmOn) {
+        alarmOn = false;
+        document.getElementById('overlay').classList.remove('on');
+        document.getElementById('banner').classList.remove('alarm');
+        document.getElementById('b-icon').textContent   = '✅';
+        document.getElementById('b-status').textContent = 'ESTADO NORMAL';
+      }
+    }
+
+    // ── Estadísticas ─────────────────────────────────────────────────────────
+    function resetStats() {
+      alarmCount = 0; maxMse = 0; minMse = Infinity; mseHistory = [];
+      ['s-alarms','s-mse','s-max','mse-min','mse-max','b-mse'].forEach(id => {
+        document.getElementById(id).textContent = id === 's-alarms' ? '0' : '–';
+      });
+      setAlarm(false);
+      log('Estadísticas reiniciadas', 'inf');
+    }
+
+    // Contador de tiempo activo
+    setInterval(() => {
+      if (!monitoring || !startTime) return;
+      const s = Math.floor((Date.now() - startTime) / 1000);
+      document.getElementById('s-time').textContent =
+        s < 60 ? `${s}s` : `${Math.floor(s/60)}m${s % 60}s`;
+    }, 1000);
+
+    // ── Calibración automática de umbral ─────────────────────────────────────
+    function calibrate() {
+      if (!monitoring) return;
+      calVals = []; calMode = true;
+      document.getElementById('btn-cal').disabled = true;
+      log('Calibración iniciada (10 s de referencia normal)...', 'warn');
+
+      setTimeout(() => {
+        calMode = false;
+        document.getElementById('btn-cal').disabled = false;
+        if (calVals.length < 4) { log('Calibración fallida: pocas muestras', 'err'); return; }
+        const mean = calVals.reduce((a,b)=>a+b,0) / calVals.length;
+        const std  = Math.sqrt(calVals.reduce((a,b)=>a+(b-mean)**2,0) / calVals.length);
+        const thr  = +(mean + 3 * std).toFixed(5);
+        threshold  = thr;
+        document.getElementById('thr-range').value = threshold;
+        document.getElementById('thr-val').textContent = threshold.toFixed(4);
+        document.getElementById('thr-lbl').textContent = threshold.toFixed(4);
+        log(`Umbral calibrado → ${threshold.toFixed(5)}  (μ=${mean.toFixed(5)}, 3σ=${(3*std).toFixed(5)})`, 'ok');
+      }, 10_000);
+    }
+
+    // ── Dibujo de forma de onda ──────────────────────────────────────────────
+    function drawWave() {
+      const cv = document.getElementById('cv-wave');
+      const W  = cv.offsetWidth, H = cv.offsetHeight;
+      if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+      const ctx = cv.getContext('2d');
+      ctx.clearRect(0, 0, W, H);
+
+      const mid = H / 2;
+
+      // Background grid line
+      ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(W, mid); ctx.stroke();
+
+      // Waveform
+      ctx.strokeStyle = alarmOn ? '#ef4444' : '#3b82f6';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let x = 0; x < W; x++) {
+        const i = (wavePos + Math.floor(x / W * WAVE_SIZE)) % WAVE_SIZE;
+        const y = mid - waveBuf[i] * mid * 0.88;
+        x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    // ── Dibujo del historial MSE ──────────────────────────────────────────────
+    function drawMse() {
+      const cv = document.getElementById('cv-mse');
+      const W  = cv.offsetWidth, H = cv.offsetHeight;
+      if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+      const ctx = cv.getContext('2d');
+      ctx.clearRect(0, 0, W, H);
+
+      if (mseHistory.length < 2) return;
+
+      const hi  = Math.max(...mseHistory, threshold) * 1.25 || 0.05;
+      const lo  = 0;
+      const pad = 8;
+      const dH  = H - pad * 2;
+      const toY = v  => pad + dH - ((v - lo) / (hi - lo)) * dH;
+      const toX = i  => i / 59 * W;
+
+      // Threshold line
+      const ty = toY(threshold);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(245,158,11,.7)';
+      ctx.lineWidth   = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(0, ty); ctx.lineTo(W, ty); ctx.stroke();
+      ctx.restore();
+
+      // Fill
+      ctx.beginPath();
+      ctx.moveTo(toX(0), toY(mseHistory[0]));
+      for (let i = 1; i < mseHistory.length; i++) ctx.lineTo(toX(i), toY(mseHistory[i]));
+      ctx.lineTo(toX(mseHistory.length - 1), H);
+      ctx.lineTo(0, H);
+      ctx.closePath();
+      ctx.fillStyle = alarmOn ? 'rgba(239,68,68,.18)' : 'rgba(59,130,246,.12)';
+      ctx.fill();
+
+      // Line
+      ctx.beginPath();
+      ctx.moveTo(toX(0), toY(mseHistory[0]));
+      for (let i = 1; i < mseHistory.length; i++) ctx.lineTo(toX(i), toY(mseHistory[i]));
+      ctx.strokeStyle = alarmOn ? '#ef4444' : '#3b82f6';
+      ctx.lineWidth   = 2;
+      ctx.stroke();
+
+      // Anomaly dots
+      for (let i = 0; i < mseHistory.length; i++) {
+        if (mseHistory[i] > threshold) {
+          ctx.beginPath();
+          ctx.arc(toX(i), toY(mseHistory[i]), 3.5, 0, Math.PI * 2);
+          ctx.fillStyle = '#ef4444';
+          ctx.fill();
+        }
+      }
+    }
+
+    // ── Animation loop ────────────────────────────────────────────────────────
+    function animFrame() {
+      drawWave(); drawMse();
+      if (monitoring) requestAnimationFrame(animFrame);
+    }
+
+    // ── Recibir resultado de inferencia ───────────────────────────────────────
+    function handleResult(d) {
+      // Buffer bar
+      const pct = Math.min(d.buffer_s / d.max_s * 100, 100);
+      document.getElementById('buf-fill').style.width = pct + '%';
+      document.getElementById('buf-text').textContent = `${d.buffer_s.toFixed(1)} / ${d.max_s.toFixed(1)} s`;
+
+      if (!d.ready) {
+        document.getElementById('b-desc').textContent =
+          `Llenando buffer… ${d.buffer_s.toFixed(1)} / ${d.max_s.toFixed(1)} s`;
+        return;
+      }
+
+      const mse = d.mse;
+      if (calMode) calVals.push(mse);
+
+      // Contador de inferencias del modelo
+      const ic = document.getElementById('infer-count');
+      ic.textContent = parseInt(ic.textContent || '0') + 1;
+
+      // Historial
+      mseHistory.push(mse);
+      if (mseHistory.length > 60) mseHistory.shift();
+
+      // Stats
+      if (mse > maxMse) {
+        maxMse = mse;
+        document.getElementById('s-max').textContent    = maxMse.toFixed(5);
+        document.getElementById('mse-max').textContent  = maxMse.toFixed(5);
+      }
+      if (mse < minMse) {
+        minMse = mse;
+        document.getElementById('mse-min').textContent  = minMse.toFixed(5);
+      }
+      document.getElementById('b-mse').textContent   = mse.toFixed(5);
+      document.getElementById('s-mse').textContent   = mse.toFixed(5);
+
+      // Alarma
+      if (mse > threshold) {
+        setAlarm(true, mse);
+        document.getElementById('b-desc').textContent =
+          `MSE ${mse.toFixed(6)} > umbral ${threshold.toFixed(4)} — ¡FALLO DETECTADO!`;
+      } else {
+        setAlarm(false, mse);
+        document.getElementById('b-desc').textContent =
+          `Funcionamiento normal · MSE ${mse.toFixed(6)} < ${threshold.toFixed(4)}`;
+      }
+    }
+
+    // ── Iniciar monitoreo ─────────────────────────────────────────────────────
+    async function startMonitoring() {
+      document.getElementById('btn-start').disabled = true;
+
+      // Pedir micrófono AQUÍ, dentro del handler del click (gesto directo de usuario).
+      // Los navegadores bloquean getUserMedia en callbacks asíncronos posteriores (ws.onopen).
+      log('Solicitando acceso al micrófono...', 'inf');
+      try {
+        stream   = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        audioCtx = new AudioContext({ sampleRate: 16_000 });
+        alarmCtx = new AudioContext();
+      } catch (err) {
+        log(`Micrófono denegado: ${err.message}`, 'err');
+        log('Ve a Configuracion del sitio en el navegador y permite el microfono', 'warn');
+        document.getElementById('btn-start').disabled = false;
+        return;
+      }
+      setBadge('bdg-mic', true);
+      log(`Microfono autorizado @ ${audioCtx.sampleRate} Hz`, 'ok');
+
+      // Configurar AudioWorklet
+      try {
+        const src = `
+          class PCMCapture extends AudioWorkletProcessor {
+            constructor() { super(); this._b = []; }
+            process(inputs) {
+              const ch = inputs[0]?.[0];
+              if (!ch) return true;
+              for (let i = 0; i < ch.length; i++) this._b.push(ch[i]);
+              if (this._b.length >= 4096) {
+                const c = new Float32Array(this._b.splice(0, 4096));
+                this.port.postMessage(c, [c.buffer]);
+              }
+              return true;
+            }
+          }
+          registerProcessor('pcm-capture', PCMCapture);
+        `;
+        const blob = new Blob([src], { type: 'application/javascript' });
+        const url  = URL.createObjectURL(blob);
+        await audioCtx.audioWorklet.addModule(url);
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        log(`Error AudioWorklet: ${err.message}`, 'err');
+        stopMonitoring(); return;
+      }
+
+      const source  = audioCtx.createMediaStreamSource(stream);
+      worklet       = new AudioWorkletNode(audioCtx, 'pcm-capture');
+      const silence = audioCtx.createGain();
+      silence.gain.value = 0;
+      source.connect(worklet);
+      worklet.connect(silence);
+      silence.connect(audioCtx.destination);
+
+      worklet.port.onmessage = ({ data: chunk }) => {
+        for (let i = 0; i < chunk.length; i++) {
+          waveBuf[wavePos] = chunk[i];
+          wavePos = (wavePos + 1) % WAVE_SIZE;
+        }
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(chunk.buffer);
+      };
+
+      // Conectar WebSocket (ya con el microfono listo)
+      log('Conectando al servidor...', 'inf');
+      ws = new WebSocket(WS_URL);
+      ws.binaryType = 'arraybuffer';
+
+      ws.onopen = () => {
+        log('Servidor conectado — streaming en curso', 'ok');
+        setBadge('bdg-ws', true);
+        document.getElementById('btn-stop').disabled = false;
+        document.getElementById('btn-cal').disabled  = false;
+        document.getElementById('b-desc').textContent = 'Llenando buffer inicial…';
+        monitoring = true;
+        startTime  = Date.now();
+        requestAnimationFrame(animFrame);
+      };
+
+      ws.onmessage = ({ data }) => handleResult(JSON.parse(data));
+
+      ws.onerror = () => {
+        log('Error WebSocket — esta el servidor en marcha?', 'err');
+        stopMonitoring();
+      };
+
+      ws.onclose = () => {
+        setBadge('bdg-ws', false);
+        if (monitoring) { log('Conexion cerrada', 'warn'); stopMonitoring(); }
+      };
+    }
+
+    // ── Detener monitoreo ─────────────────────────────────────────────────────
+    function stopMonitoring() {
+      monitoring = false;
+      if (worklet)   { worklet.disconnect(); worklet = null; }
+      if (audioCtx)  { audioCtx.close(); audioCtx = null; }
+      if (stream)    { stream.getTracks().forEach(t => t.stop()); stream = null; }
+      if (ws && ws.readyState <= 1) { ws.close(); ws = null; }
+      setBadge('bdg-mic', false);
+      document.getElementById('btn-start').disabled = false;
+      document.getElementById('btn-stop').disabled  = true;
+      document.getElementById('btn-cal').disabled   = true;
+      setAlarm(false);
+      document.getElementById('b-desc').textContent = 'Monitoreo detenido';
+      log('Monitoreo detenido', 'warn');
+    }
+
+    // ── Badge helpers ─────────────────────────────────────────────────────────
+    function setBadge(id, on) {
+      document.getElementById(id).className = 'badge ' + (on ? 'on' : 'off');
+    }
+
+    // ── Análisis de archivo ───────────────────────────────────────────────────
+    async function analyzeFile(file) {
+      if (!file) return;
+      document.getElementById('file-spinner').style.display = 'block';
+      document.getElementById('file-result').style.display  = 'none';
+      log(`Analizando archivo: ${file.name}`, 'inf');
+
+      const form = new FormData();
+      form.append('audio', file);
+
+      try {
+        const resp = await fetch('/infer-file', { method: 'POST', body: form });
+        const d    = await resp.json();
+
+        if (d.error) { log(`Error: ${d.error}`, 'err'); return; }
+
+        const isAnomaly = d.mse_max > threshold;
+        document.getElementById('fr-max').textContent     = d.mse_max.toFixed(5);
+        document.getElementById('fr-mean').textContent    = d.mse_mean.toFixed(5);
+        document.getElementById('fr-dur').textContent     = d.duration_s + 's';
+        document.getElementById('fr-verdict').textContent = isAnomaly ? 'ANOMALIA' : 'NORMAL';
+        document.getElementById('fr-verdict').style.color = isAnomaly ? 'var(--red)' : 'var(--green)';
+        const sugerido = d.umbral_sugerido ?? null;
+        document.getElementById('fr-info').textContent =
+          `${file.name}  ·  ${d.windows} ventanas  ·  umbral activo: ${threshold.toFixed(4)}` +
+          (sugerido ? `  ·  umbral sugerido para este audio: ${sugerido.toFixed(5)}` : '');
+        document.getElementById('file-result').style.display = 'block';
+
+        drawFileChart(d.mse_values, isAnomaly);
+        log(`${file.name} → MSE max=${d.mse_max.toFixed(5)}  estado=${isAnomaly ? 'ANOMALIA' : 'NORMAL'}`,
+            isAnomaly ? 'err' : 'ok');
+      } catch (e) {
+        log(`Error al analizar: ${e.message}`, 'err');
+      } finally {
+        document.getElementById('file-spinner').style.display = 'none';
+      }
+    }
+
+    function drawFileChart(values, anomaly) {
+      const cv  = document.getElementById('fr-chart');
+      const W   = cv.offsetWidth, H = cv.offsetHeight;
+      cv.width  = W; cv.height = H;
+      const ctx = cv.getContext('2d');
+      ctx.clearRect(0, 0, W, H);
+      if (values.length === 0) return;
+
+      const hi  = Math.max(...values, threshold) * 1.3 || 0.05;
+      const pad = 6;
+      const dH  = H - pad * 2;
+      const toY = v => pad + dH - (v / hi) * dH;
+      const toX = i => values.length < 2 ? W / 2 : i / (values.length - 1) * W;
+
+      // Threshold
+      ctx.strokeStyle = 'rgba(245,158,11,.7)';
+      ctx.lineWidth = 1; ctx.setLineDash([4,4]);
+      const ty = toY(threshold);
+      ctx.beginPath(); ctx.moveTo(0, ty); ctx.lineTo(W, ty); ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Fill
+      ctx.beginPath();
+      ctx.moveTo(toX(0), toY(values[0]));
+      for (let i = 1; i < values.length; i++) ctx.lineTo(toX(i), toY(values[i]));
+      ctx.lineTo(toX(values.length - 1), H); ctx.lineTo(0, H); ctx.closePath();
+      ctx.fillStyle = anomaly ? 'rgba(239,68,68,.2)' : 'rgba(59,130,246,.15)';
+      ctx.fill();
+
+      // Line
+      ctx.beginPath();
+      ctx.moveTo(toX(0), toY(values[0]));
+      for (let i = 1; i < values.length; i++) ctx.lineTo(toX(i), toY(values[i]));
+      ctx.strokeStyle = anomaly ? '#ef4444' : '#3b82f6';
+      ctx.lineWidth = 2; ctx.stroke();
+
+      // Dots
+      for (let i = 0; i < values.length; i++) {
+        ctx.beginPath();
+        ctx.arc(toX(i), toY(values[i]), 3, 0, Math.PI * 2);
+        ctx.fillStyle = values[i] > threshold ? '#ef4444' : '#22c55e';
+        ctx.fill();
+      }
+    }
+
+    // ── Init ──────────────────────────────────────────────────────────────────
+    log('Sistema listo · pulsa ▶ INICIAR para comenzar', 'inf');
+  </script>
+</body>
+</html>
