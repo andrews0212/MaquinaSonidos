@@ -13,7 +13,7 @@ def entrenar_modelo():
     print(f"--- Iniciando entrenamiento en: {device} ---")
 
     # 2. Hiperparámetros
-    EPOCHS = 15          # Veces que la red verá todo el dataset completo
+    EPOCHS = 20         # Veces que la red verá todo el dataset completo
     BATCH_SIZE = 16      # Paquetes de imágenes por iteración
     LEARNING_RATE = 1e-3 # Tamaño del paso del optimizador
     

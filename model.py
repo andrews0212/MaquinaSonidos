@@ -4,7 +4,7 @@ import torch.nn as nn
 class AutoencoderCNN(nn.Module):
     def __init__(self):
         super(AutoencoderCNN, self).__init__()
-        
+
         # 1. ENCODER: El "embudo" que comprime la imagen
         # Entra 1 canal (imagen en escala de grises), salen 16, luego 32, luego 64.
         self.encoder = nn.Sequential(
@@ -15,7 +15,7 @@ class AutoencoderCNN(nn.Module):
             nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=2, padding=1),
             nn.ReLU()
         )
-        
+
         # 2. DECODER: El "pintor" que intenta reconstruir la imagen original
         # Hace el proceso inverso: de 64 canales baja a 32, luego a 16, y vuelve a 1 canal.
         self.decoder = nn.Sequential(
@@ -37,11 +37,11 @@ class AutoencoderCNN(nn.Module):
 if __name__ == "__main__":
     # Simulamos un tensor que representa un "lote" de 8 espectrogramas
     # Formato PyTorch: (Batch_Size, Channels, Height, Width) -> (8, 1, 128, 313)
-    espectrograma_simulado = torch.randn(8, 1, 128, 313) 
-    
+    espectrograma_simulado = torch.randn(8, 1, 128, 313)
+
     modelo = AutoencoderCNN()
     salida = modelo(espectrograma_simulado)
-    
+
     print(f"Formato de entrada: {espectrograma_simulado.shape}")
     print(f"Formato de salida : {salida.shape}")
     # Si ambas formas coinciden, nuestra red está bien estructurada.
