@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sonitel | NOC Industrial</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #0f172a;
+            --bg-panel: #1e293b;
+            --bg-card: #334155;
+            --accent-red: #ef4444;
+            --accent-green: #10b981;
+            --accent-blue: #3b82f6;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #475569;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .navbar {
+            background-color: var(--bg-panel);
+            border-bottom: 1px solid var(--border-color);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+        }
+
+        .brand { display: flex; align-items: center; gap: 15px; }
+        .brand h1 { font-size: 22px; font-weight: 800; letter-spacing: 1px; color: var(--text-main); }
+        .brand span { color: var(--accent-blue); }
+        
+        .btn-alta {
+            background-color: var(--accent-blue); color: white; border: none;
+            padding: 10px 20px; border-radius: 6px; font-weight: 800; cursor: pointer;
+            transition: background-color 0.2s; font-family: 'Inter', sans-serif;
+            margin-left: 20px;
+        }
+        .btn-alta:hover { background-color: #2563eb; }
+
+        .sys-status {
+            display: flex; align-items: center; gap: 20px;
+            font-family: 'JetBrains Mono', monospace; font-size: 14px;
+        }
+
+        #clock { color: var(--accent-blue); font-weight: bold; }
+
+        .container { padding: 30px; flex-grow: 1; }
+        .header-section { margin-bottom: 25px; }
+        .header-section h2 { font-size: 18px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;}
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+            gap: 25px;
+        }
+
+        .card {
+            background-color: var(--bg-card); border-radius: 8px; overflow: hidden;
+            border: 1px solid var(--border-color); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            display: flex; flex-direction: column; position: relative;
+        }
+
+        .card::before {
+            content: ''; position: absolute;
+            top: 0; left: 0; right: 0; height: 4px;
+            background-color: var(--accent-red);
+            animation: pulse-border 1.5s infinite;
+        }
+
+        @keyframes pulse-border {
+            0% { opacity: 1; box-shadow: 0 0 15px var(--accent-red); }
+            50% { opacity: 0.5; box-shadow: none; }
+            100% { opacity: 1; box-shadow: 0 0 15px var(--accent-red); }
+        }
+
+        .card-header {
+            padding: 15px 20px; background-color: rgba(0,0,0,0.2);
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .machine-id { font-size: 18px; font-weight: 800; display: flex; align-items: center; gap: 10px;}
+        .badge {
+            font-size: 11px; padding: 4px 8px; border-radius: 4px;
+            text-transform: uppercase; font-weight: 800; letter-spacing: 1px;
+            background-color: var(--accent-blue); color: #fff;
+        }
+
+        .card-body { padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+
+        .metrics-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 15px;
+            background-color: var(--bg-panel); padding: 15px;
+            border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 13px;
+        }
+
+        .metric-item { display: flex; flex-direction: column; gap: 5px; }
+        .metric-label { color: var(--text-muted); font-size: 11px; text-transform: uppercase; }
+        .metric-value { font-size: 16px; font-weight: 700; }
+        .text-danger { color: #fca5a5; }
+
+        .spectrogram-wrapper {
+            background-color: #000; padding: 2px; border-radius: 4px;
+            border: 1px solid var(--border-color); position: relative;
+        }
+        
+        .spectrogram-wrapper::after {
+            content: 'HITL - REVISIÓN VISUAL REQUERIDA';
+            position: absolute; top: 5px; left: 5px;
+            font-size: 10px; color: rgba(255,255,255,0.6);
+            font-family: 'Inter', sans-serif; font-weight: 800;
+            pointer-events: none;
+        }
+
+        canvas { width: 100%; height: 140px; image-rendering: pixelated; display: block; border-radius: 2px;}
+
+        .actions {
+            display: flex; gap: 10px; padding: 15px 20px;
+            background-color: rgba(0,0,0,0.1); border-top: 1px solid var(--border-color);
+        }
+
+        button.action-btn {
+            flex: 1; padding: 12px; border: none; border-radius: 4px;
+            font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px;
+            cursor: pointer; transition: all 0.2s;
+        }
+
+        .btn-confirm { background-color: var(--accent-red); color: white; }
+        .btn-confirm:hover { background-color: #dc2626; }
+        
+        .btn-dismiss { background-color: transparent; border: 1px solid var(--text-muted); color: var(--text-main); }
+        .btn-dismiss:hover { background-color: var(--border-color); }
+
+        .all-clear {
+            grid-column: 1 / -1; text-align: center; padding: 60px 20px;
+            color: var(--accent-green); font-size: 20px; font-weight: 600;
+            background: rgba(16, 185, 129, 0.05); border: 1px dashed var(--accent-green); border-radius: 8px;
+        }
+
+        /* Modal Styles */
+        dialog {
+            margin: auto; padding: 25px; background-color: var(--bg-panel);
+            color: var(--text-main); border: 1px solid var(--border-color);
+            border-radius: 8px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+            width: 420px;
+        }
+        dialog::backdrop { background: rgba(0, 0, 0, 0.7); }
+        
+        .form-group { margin-bottom: 15px; display: flex; flex-direction: column; gap: 5px; }
+        .form-group label { font-size: 13px; color: var(--text-muted); font-weight: 600; }
+        .form-group input, .form-group select {
+            padding: 10px; border-radius: 4px; border: 1px solid var(--border-color);
+            background-color: var(--bg-base); color: var(--text-main); font-family: 'Inter', sans-serif;
+        }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 25px; }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="brand">
+            <h1>SONITEL <span>|</span> EDGE NOC</h1>
+            <button id="btnNewMachine" class="btn-alta">➕ Alta de Equipo</button>
+        </div>
+        <div class="sys-status">
+            <span>ESTADO: <strong style="color:var(--accent-green)">EN LÍNEA</strong></span>
+            <span>PLANTAS: <strong>43</strong></span>
+            <span id="clock">00:00:00</span>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="header-section">
+            <h2>Panel de Excepciones Acústicas Activas</h2>
+        </div>
+        <div class="grid" id="alertas-container"></div>
+    </div>
+
+    <dialog id="modalAddMachine">
+        <h2 style="margin-bottom: 20px; font-size: 18px; color: var(--accent-blue); border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">Registrar Nuevo Equipo</h2>
+        <form id="formAddMachine">
+            <div class="form-group">
+                <label>ID de la Planta (ej. Planta_Sevilla)</label>
+                <input type="text" id="inputPlanta" required placeholder="Ingrese ID de Planta">
+            </div>
+            <div class="form-group">
+                <label>ID de la Máquina Física</label>
+                <input type="text" id="inputMaquina" required placeholder="Ingrese ID de Máquina">
+            </div>
+            <div class="form-group">
+                <label>Familia Mecánica (Modelo IA)</label>
+                <select id="inputTipo" required>
+                    <option value="pump">Bomba de Agua (pump)</option>
+                    <option value="valve">Válvula (valve)</option>
+                    <option value="slider">Riel de Deslizamiento (slider)</option>
+                    <option value="ToyCar">Coche Industrial (ToyCar)</option>
+                    <option value="ToyConveyor">Cinta Transportadora (ToyConveyor)</option>
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="action-btn btn-dismiss" id="btnCancelModal" style="border:none; padding: 10px;">Cancelar</button>
+                <button type="submit" class="action-btn btn-confirm" style="background-color: var(--accent-blue);">Guardar Alta</button>
+            </div>
+        </form>
+    </dialog>
+
+    <script>
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').innerText = now.toLocaleTimeString('es-ES', { hour12: false });
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Lógica Modal Alta
+        const modal = document.getElementById('modalAddMachine');
+        document.getElementById('btnNewMachine').addEventListener('click', () => modal.showModal());
+        document.getElementById('btnCancelModal').addEventListener('click', () => {
+            modal.close();
+            document.getElementById('formAddMachine').reset();
+        });
+
+        document.getElementById('formAddMachine').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                id_planta: document.getElementById('inputPlanta').value,
+                id_maquina: document.getElementById('inputMaquina').value,
+                tipo_maquina: document.getElementById('inputTipo').value
+            };
+
+            try {
+                const res = await fetch('http://127.0.0.1:8001/api/inventory/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (res.ok) {
+                    alert('Equipo dado de alta con éxito.\nEsperando conexión del demonio Edge de planta para iniciar telemetría.');
+                    document.getElementById('formAddMachine').reset();
+                    modal.close();
+                } else {
+                    alert('Error al registrar el equipo.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error de conexión con el backend.');
+            }
+        });
+
+        function renderizarEspectrograma(canvasId, dataMatrix) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas || !dataMatrix || dataMatrix.length === 0) return;
+            
+            const ctx = canvas.getContext('2d');
+            const height = dataMatrix.length;      
+            const width = dataMatrix[0].length;    
+            
+            canvas.width = width;
+            canvas.height = height;
+            
+            const imgData = ctx.createImageData(width, height);
+            
+            for(let y = 0; y < height; y++) {
+                for(let x = 0; x < width; x++) {
+                    const val = dataMatrix[height - 1 - y][x]; 
+                    const intensity = Math.floor(val * 255);
+                    const index = (y * width + x) * 4;
+                    
+                    imgData.data[index] = intensity > 128 ? 255 : intensity * 2;          
+                    imgData.data[index+1] = intensity < 128 ? Math.max(0, intensity * 1.5) : 255 - (intensity - 128)*2; 
+                    imgData.data[index+2] = Math.max(0, 255 - intensity * 2);  
+                    imgData.data[index+3] = 255;               
+                }
+            }
+            ctx.putImageData(imgData, 0, 0);
+        }
+
+        async function cargarAlertas() {
+            try {
+                const response = await fetch('http://127.0.0.1:8001/api/dashboard/active');
+                const alertas = await response.json();
+                const container = document.getElementById('alertas-container');
+                container.innerHTML = '';
+                
+                let alertasActivas = 0;
+
+                alertas.forEach(alerta => {
+                    if(alerta.estado_verificacion === "PENDIENTE_OPERARIO") {
+                        alertasActivas++;
+                        const canvasId = `canvas_${alerta.id_planta}_${alerta.id_maquina}`;
+                        
+                        const card = document.createElement('div');
+                        card.className = 'card';
+                        card.innerHTML = `
+                            <div class="card-header">
+                                <div class="machine-id">
+                                    <span class="badge">${alerta.tipo_maquina}</span>
+                                    ${alerta.id_maquina}
+                                </div>
+                                <span style="color:var(--text-muted); font-size: 13px;">${alerta.id_planta}</span>
+                            </div>
+                            
+                            <div class="card-body">
+                                <div class="spectrogram-wrapper">
+                                    <canvas id="${canvasId}"></canvas>
+                                </div>
+                                
+                                <div class="metrics-grid">
+                                    <div class="metric-item">
+                                        <span class="metric-label">Desviación MSE</span>
+                                        <span class="metric-value text-danger">${alerta.error_mse.toFixed(6)}</span>
+                                    </div>
+                                    <div class="metric-item">
+                                        <span class="metric-label">Umbral Tolerancia</span>
+                                        <span class="metric-value">${alerta.umbral_limite.toFixed(6)}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="actions">
+                                <button class="action-btn btn-dismiss" onclick="validar('${alerta.id_planta}_${alerta.id_maquina}', 'DESCARTAR')">
+                                    ✖ Falso Positivo
+                                </button>
+                                <button class="action-btn btn-confirm" onclick="validar('${alerta.id_planta}_${alerta.id_maquina}', 'CONFIRMAR')">
+                                    ⚙️ Desplegar Técnico
+                                </button>
+                            </div>
+                        `;
+                        container.appendChild(card);
+                        renderizarEspectrograma(canvasId, alerta.espectrograma_data);
+                    }
+                });
+
+                if (alertasActivas === 0) {
+                    container.innerHTML = '<div class="all-clear">✓ Sistemas estabilizados. Sin excepciones acústicas en la red.</div>';
+                }
+            } catch (error) {
+                console.error('Error de conexión con el backend:', error);
+            }
+        }
+
+        async function validar(id_registro, accion) {
+            try {
+                await fetch(`http://127.0.0.1:8001/api/dashboard/verify/${id_registro}?accion=${accion}`, { method: 'POST' });
+                cargarAlertas();
+            } catch(error) {
+                alert("Error de comunicación con la central.");
+            }
+        }
+
+        setInterval(cargarAlertas, 3000);
+        cargarAlertas();
+    </script>
+</body>
+</html>
