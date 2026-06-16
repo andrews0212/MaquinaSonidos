@@ -2,10 +2,13 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+from pathlib import Path
 
 # Importamos nuestros propios módulos
-from dataset import DCASEAudioDataset
-from model import AutoencoderCNN
+from core.dataset import DCASEAudioDataset
+from core.model import AutoencoderCNN
+
+PROJECT_ROOT = Path(__file__).parent.parent
 
 def entrenar_modelo():
     # 1. Configuración del Entorno (Detectar GPU si existe)
@@ -17,8 +20,7 @@ def entrenar_modelo():
     BATCH_SIZE = 16      # Paquetes de imágenes por iteración
     LEARNING_RATE = 1e-3 # Tamaño del paso del optimizador
     
-    # IMPORTANTE: Cambia esta ruta a tu carpeta real
-    RUTA_TRAIN = r"J:\Master IA\IA Generativa\IAG\dev_data_pump\pump\train"
+    RUTA_TRAIN = PROJECT_ROOT / "data" / "pump" / "id_00" / "normal"
 
     # 3. Inicializar Datos, Modelo, Pérdida y Optimizador
     dataset = DCASEAudioDataset(data_dir=RUTA_TRAIN)
@@ -59,7 +61,7 @@ def entrenar_modelo():
         # 5. Guardar el modelo si es el mejor hasta ahora
         if loss_promedio < mejor_loss:
             mejor_loss = loss_promedio
-            torch.save(modelo.state_dict(), "autoencoder_bomba_mejor.pth")
+            torch.save(modelo.state_dict(), "models/autoencoder_bomba_mejor.pth")
             print("  -> ¡Nuevo mejor modelo guardado!")
 
     print("--- Entrenamiento Finalizado ---")

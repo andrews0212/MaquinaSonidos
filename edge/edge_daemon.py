@@ -4,7 +4,7 @@ import requests
 import torch
 import numpy as np
 import librosa
-from model import AutoencoderCNN
+from core.model import AutoencoderCNN
 
 URL_BACKEND = "http://127.0.0.1:8001/api/alerts"
 

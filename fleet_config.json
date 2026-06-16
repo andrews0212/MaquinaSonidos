@@ -1,22 +1,22 @@
 {
     "pump": {
-        "modelo_path": "modelo_pump_experto.pth",
+        "modelo_path": "models/modelo_pump_experto.pth",
         "umbral_alarma": 0.000850
     },
     "slider": {
-        "modelo_path": "modelo_slider_experto.pth",
+        "modelo_path": "models/modelo_slider_experto.pth",
         "umbral_alarma": 0.001000
     },
     "ToyCar": {
-        "modelo_path": "modelo_ToyCar_experto.pth",
+        "modelo_path": "models/modelo_ToyCar_experto.pth",
         "umbral_alarma": 0.000950
     },
     "ToyConveyor": {
-        "modelo_path": "modelo_ToyConveyor_experto.pth",
+        "modelo_path": "models/modelo_ToyConveyor_experto.pth",
         "umbral_alarma": 0.000900
     },
     "valve": {
-        "modelo_path": "modelo_valve_experto.pth",
+        "modelo_path": "models/modelo_valve_experto.pth",
         "umbral_alarma": 0.001100
     }
 }

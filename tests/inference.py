@@ -4,7 +4,7 @@ import librosa
 import numpy as np
 
 # Importamos la arquitectura vacía para luego rellenarla con los pesos
-from model import AutoencoderCNN
+from core.model import AutoencoderCNN
 
 def preprocesar_audio_inferencia(ruta_audio, max_frames=320):
     """Hace exactamente lo mismo que el DataLoader, pero para un solo archivo al vuelo."""
@@ -25,7 +25,7 @@ def preprocesar_audio_inferencia(ruta_audio, max_frames=320):
     tensor = torch.tensor(mel_spec_normalized, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
     return tensor
 
-def evaluar_maquina(ruta_audio, ruta_modelo="autoencoder_bomba_mejor.pth"):
+def evaluar_maquina(ruta_audio, ruta_modelo="models/autoencoder_bomba_mejor.pth"):
     # 1. Cargar el modelo en CPU (En Edge normalmente no hay GPU potentes)
     device = torch.device("cpu")
     modelo = AutoencoderCNN()

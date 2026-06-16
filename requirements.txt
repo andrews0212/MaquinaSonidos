@@ -1,0 +1,18 @@
+# ML / Audio
+torch>=2.2.0
+librosa>=0.10.0
+numpy>=1.26.0
+
+# Visualización (notebooks)
+matplotlib>=3.8.0
+
+# API Backend
+fastapi>=0.111.0
+uvicorn>=0.30.0
+pydantic>=2.7.0
+
+# Edge daemon
+requests>=2.32.0
+
+# Notebooks
+jupyterlab>=4.2.0

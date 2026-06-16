@@ -30,7 +30,7 @@ def ejecutar_test_flota():
         
         # Ejecución del subproceso dinámico
         comando = [
-            "python", "edge_daemon.py",
+            "python", "edge/edge_daemon.py",
             "--planta", "Planta_Pruebas_Global",
             "--maquina", id_maquina_test,
             "--tipo", maquina,

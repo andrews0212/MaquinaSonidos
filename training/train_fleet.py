@@ -5,8 +5,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from dataset import DCASEAudioDataset
-from model import AutoencoderCNN
+from core.dataset import DCASEAudioDataset
+from core.model import AutoencoderCNN
 
 def calcular_umbral_3sigma(modelo, dataloader, device):
     modelo.eval()
@@ -64,7 +64,8 @@ def entrenar_toda_la_flota(ruta_base):
                 optimizer.step()
         
         umbral_optimo = calcular_umbral_3sigma(modelo, dataloader, device)
-        path_modelo = f"modelo_{tipo_maquina}_experto.pth"
+        path_modelo = os.path.join("models", f"modelo_{tipo_maquina}_experto.pth")
+        os.makedirs("models", exist_ok=True)
         torch.save(modelo.state_dict(), path_modelo)
         
         configuracion_flota[tipo_maquina] = {
